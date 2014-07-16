@@ -99,6 +99,10 @@ func (s *Server) serve(listener deadliningListener) {
 	}
 }
 
+func (s *Server) errorResponse(conn net.Conn, msg string) {
+	conn.Write(append([]byte(fmt.Sprintf(`{"ResponseType": "error","Data": "%s"}`, msg)), '\n'))
+}
+
 func (s *Server) handleRequest(conn net.Conn) {
 	defer conn.Close()
 	bin := bufio.NewReader(conn)
@@ -109,17 +113,25 @@ func (s *Server) handleRequest(conn net.Conn) {
 		var data []*alpm.Pkg
 		switch req.RequestType {
 		case "repo":
-			data = s.services["repo"].GetData().([]*alpm.Pkg)
+			if v, ok := s.services["repo"]; ok {
+				data = v.GetData().([]*alpm.Pkg)
+			} else {
+				s.errorResponse(conn, "invalid request")
+			}
 		case "aur":
-			data = s.services["aur"].GetData().([]*alpm.Pkg)
+			if v, ok := s.services["aur"]; ok {
+				data = v.GetData().([]*alpm.Pkg)
+			} else {
+				s.errorResponse(conn, "invalid request")
+			}
 		default:
-			conn.Write(append([]byte(`{"ResponseType": "error","Data": "invalid request"}`), '\n'))
+			s.errorResponse(conn, "invalid request")
 			return
 		}
 		resp := &Response{"ok", data}
 		respString, err := json.Marshal(resp)
 		if err != nil {
-			conn.Write(append([]byte(`{"ResponseType": "error","Data": "could not marshal json"}`), '\n'))
+			s.errorResponse(conn, "could not marshal json")
 		} else {
 			respString = append(respString, '\n')
 			conn.Write(respString)
