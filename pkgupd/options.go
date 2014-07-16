@@ -9,6 +9,6 @@ type Options struct {
 	AURInterval  int            `long:"aur-interval" default:"1800" description:"Interval for AUR checks"`
 	PacmanConf   flags.Filename `long:"pacman-conf" default:"/etc/pacman.conf" description:"Pacman configuration file"`
 	PollInterval int            `long:"poll-interval" default:"600" description:"Interval for repo updates"`
-	Verbose      bool           `short:"v" long:"verbose" description:"Enable verbose logging"`
+	Verbose      []bool         `short:"v" long:"verbose" description:"Enable verbose logging"`
 	DBRoot       flags.Filename `short:"d" long:"db-root" default:"/tmp/pkgupd-sandbox" description:"Local/sync database root directory"`
 }

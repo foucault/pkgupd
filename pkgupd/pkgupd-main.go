@@ -233,10 +233,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if opts.Verbose {
-		log.SetLevel(log.LogDebug)
-	} else {
+	switch len(opts.Verbose) {
+	case 0:
 		log.SetLevel(log.LogWarn)
+	case 1:
+		log.SetLevel(log.LogInfo)
+	default:
+		log.SetLevel(log.LogDebug)
 	}
 	// Parse configuration
 	conf, err := alpm.ParsePacmanConf(string(opts.PacmanConf))
