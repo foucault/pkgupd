@@ -8,6 +8,9 @@ import "time"
 import "sync"
 import "pkgupd/alpm"
 import "encoding/json"
+import "pkgupd/log"
+
+const MAX_REQUEST_LENGTH = 16384
 
 type Server struct {
 	services    map[string]ServiceRunner
@@ -105,39 +108,55 @@ func (s *Server) errorResponse(conn net.Conn, msg string) {
 
 func (s *Server) handleRequest(conn net.Conn) {
 	defer conn.Close()
-	bin := bufio.NewReader(conn)
-	line, err := bin.ReadBytes('\n')
-	if err == nil {
-		var req Request
-		err = json.Unmarshal(line, &req)
-		var data []*alpm.Pkg
-		switch req.RequestType {
-		case "repo":
-			if v, ok := s.services["repo"]; ok {
-				data = v.GetData().([]*alpm.Pkg)
-			} else {
-				s.errorResponse(conn, "invalid request")
-			}
-		case "aur":
-			if v, ok := s.services["aur"]; ok {
-				data = v.GetData().([]*alpm.Pkg)
-			} else {
-				s.errorResponse(conn, "invalid request")
-			}
-		default:
-			s.errorResponse(conn, "invalid request")
-			return
+	log.Debugf("Handling request from %s\n", conn.RemoteAddr())
+	bin := bufio.NewScanner(conn)
+	var line []byte
+	totalRead := 0
+	for bin.Scan() {
+		line = bin.Bytes()
+		totalRead += len(line)
+		// Stop reading if request length is too big
+		if totalRead >= MAX_REQUEST_LENGTH {
+			s.errorResponse(conn, "request length exceeded")
+			log.Debugf("Request from %s exceeded length %d\n",
+				conn.RemoteAddr(), MAX_REQUEST_LENGTH)
+			break
 		}
-		resp := &Response{"ok", data}
-		respString, err := json.Marshal(resp)
-		if err != nil {
-			s.errorResponse(conn, "could not marshal json")
+		if err := bin.Err(); err == nil {
+			var req Request
+			err = json.Unmarshal(line, &req)
+			var data []*alpm.Pkg
+			switch req.RequestType {
+			case "repo":
+				if v, ok := s.services["repo"]; ok {
+					data = v.GetData().([]*alpm.Pkg)
+				} else {
+					s.errorResponse(conn, "invalid request")
+					break
+				}
+			case "aur":
+				if v, ok := s.services["aur"]; ok {
+					data = v.GetData().([]*alpm.Pkg)
+				} else {
+					s.errorResponse(conn, "invalid request")
+					break
+				}
+			default:
+				s.errorResponse(conn, "invalid request")
+				break
+			}
+			resp := &Response{"ok", data}
+			respString, err := json.Marshal(resp)
+			if err != nil {
+				s.errorResponse(conn, "could not marshal json")
+			} else {
+				respString = append(respString, '\n')
+				conn.Write(respString)
+			}
 		} else {
-			respString = append(respString, '\n')
-			conn.Write(respString)
+			log.Warnln(err)
+			break
 		}
-	} else {
-		fmt.Println(err)
-		conn.Write(append([]byte(`{"ResponseType": "error","Data": "invalid request"}`), '\n'))
 	}
+	log.Debugf("Connection from %s handled successfully\n", conn.RemoteAddr())
 }
