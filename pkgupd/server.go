@@ -9,6 +9,8 @@ import "sync"
 import "pkgupd/alpm"
 import "encoding/json"
 import "pkgupd/log"
+import "strings"
+import "errors"
 
 const MAX_REQUEST_LENGTH = 16384
 
@@ -64,16 +66,37 @@ func (s *Server) Stop() {
 	close(s.closeMsg)
 }
 
-func (s *Server) Serve() {
+func (s *Server) createListener(proto string, addr string) (deadliningListener, error) {
+	proto = strings.ToLower(proto)
+	switch proto {
+	case "tcp":
+		taddr, err := net.ResolveTCPAddr("tcp", addr)
+		if err != nil {
+			log.Errorln("Failed to resolve tcp address", addr)
+			return nil, err
+		} else {
+			log.Debugln("TCP address", addr, "created successfully")
+			return net.ListenTCP("tcp", taddr)
+		}
+	case "unix":
+		uaddr, err := net.ResolveUnixAddr("unix", addr)
+		if err != nil {
+			log.Errorln("Failed to resolve unix address", addr)
+			return nil, err
+		} else {
+			log.Debugln("UNIX address", addr, "created successfully")
+			return net.ListenUnix("unix", uaddr)
+		}
+	}
+	return nil, errors.New("Invalid protocol specified")
+}
+
+func (s *Server) Serve(proto string, addr string) {
 	s.waitGroup.Add(1)
 	defer s.waitGroup.Done()
-	tcpAddr, err := net.ResolveTCPAddr("tcp", ":7356")
+	listener, err := s.createListener(proto, addr)
 	if err != nil {
-		s.ServerError <- true
-		return
-	}
-	listener, err := net.ListenTCP("tcp", tcpAddr)
-	if err != nil {
+		log.Errorln("Failed to create listener:", err)
 		s.ServerError <- true
 		return
 	}

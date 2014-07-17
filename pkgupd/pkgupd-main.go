@@ -302,7 +302,7 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
 
-	go server.Serve()
+	go server.Serve(opts.ListenType, opts.ListenAddr)
 	server.Start()
 
 mainloop:

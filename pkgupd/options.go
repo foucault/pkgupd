@@ -11,4 +11,6 @@ type Options struct {
 	PollInterval int            `long:"poll-interval" default:"600" description:"Interval for repo updates"`
 	Verbose      []bool         `short:"v" long:"verbose" description:"Enable verbose logging"`
 	DBRoot       flags.Filename `short:"d" long:"db-root" default:"/tmp/pkgupd-sandbox" description:"Local/sync database root directory"`
+	ListenType   string         `short:"l" long:"listen-type" default:"tcp" description:"Server listening protocol, 'tcp' or 'unix'"`
+	ListenAddr   string         `short:"r" long:"listen-addr" default:":7356" description:"Address (addr:port) or socket of the server"`
 }
