@@ -15,7 +15,7 @@ import "errors"
 const MAX_REQUEST_LENGTH = 16384
 
 type Server struct {
-	services    map[string]ServiceRunner
+	services    map[string]DataService
 	closeMsg    chan bool
 	waitGroup   *sync.WaitGroup
 	ServerError chan bool
@@ -37,12 +37,12 @@ type deadliningListener interface {
 }
 
 func NewServer() *Server {
-	s := &Server{make(map[string]ServiceRunner),
+	s := &Server{make(map[string]DataService),
 		make(chan bool), &sync.WaitGroup{}, make(chan bool)}
 	return s
 }
 
-func (s *Server) AddService(key string, service ServiceRunner) {
+func (s *Server) AddService(key string, service DataService) {
 	s.services[key] = service
 }
 

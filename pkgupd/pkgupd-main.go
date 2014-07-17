@@ -280,7 +280,7 @@ func main() {
 	}
 
 	server := NewServer()
-	services := make(map[string]ServiceRunner)
+	services := make(map[string]DataService)
 	services["repo"] = NewRepoService(time.Duration((opts.PollInterval))*time.Second, libalpm, conf)
 	if opts.EnableAUR {
 		log.Infoln("Enabling AUR Service")

@@ -14,15 +14,25 @@ type Listener interface {
 	ProcessEvent(string)
 }
 
-type ServiceRunner interface {
+// Service is a generic goroutine that is both a listener
+// and an event creator
+type Service interface {
 	Listener
 	Start()
 	Stop()
-	GetData() interface{}
-	SendMessage(string)
 	AddListener(listener Listener)
 }
 
+// DataService also supports retrieval of data and message passing
+type DataService interface {
+	Service
+	GetData() interface{}
+	SendMessage(string)
+}
+
+// TimeoutService is a service that executes alpm
+// processes on a given interval or at request
+// Implements DataService
 type TimeoutService struct {
 	Timeout      time.Duration
 	libalpm      *alpm.Alpm
@@ -33,21 +43,6 @@ type TimeoutService struct {
 	msgProcessor msgProcessor
 	listeners    []Listener
 	conf         map[string]map[string]interface{}
-}
-
-type SyncService struct {
-	*TimeoutService
-}
-
-type RepoService struct {
-	*TimeoutService
-	packages            *list.List
-	ignoredPackageNames []string
-}
-
-type AURService struct {
-	*TimeoutService
-	packages *list.List
 }
 
 func (s *TimeoutService) Start() {
@@ -87,6 +82,7 @@ func (s *TimeoutService) setMsgProcessorCB(cb msgProcessor) {
 }
 
 func (s *TimeoutService) SendMessage(msg string) {
+	// quit is a reserved message
 	if msg != "quit" {
 		s.msgChannel <- msg
 	}
@@ -98,6 +94,10 @@ func (s *TimeoutService) AddListener(listener Listener) {
 
 func (s *TimeoutService) ProcessEvent(msg string) {
 	s.msgProcessor(msg)
+}
+
+type SyncService struct {
+	*TimeoutService
 }
 
 func (s *SyncService) syncExecuteCB() {
@@ -125,6 +125,12 @@ func (s *SyncService) GetData() interface{} {
 	return nil
 }
 
+type RepoService struct {
+	*TimeoutService
+	packages            *list.List
+	ignoredPackageNames []string
+}
+
 func (s *RepoService) repoExecuteCB() {
 	log.Infoln("Execute Repo Service Update")
 	s.mutex.Lock()
@@ -143,6 +149,7 @@ func (s *RepoService) repoExecuteCB() {
 func (s *RepoService) processMsg(msg string) {
 	switch msg {
 	case "sync_finished":
+		log.Debugln("RepoService: sync_finished event")
 		s.repoExecuteCB()
 	default:
 		return
@@ -155,6 +162,11 @@ func (s *RepoService) GetData() interface{} {
 		pkgs = append(pkgs, e.Value.(*alpm.Pkg))
 	}
 	return pkgs
+}
+
+type AURService struct {
+	*TimeoutService
+	packages *list.List
 }
 
 func (s *AURService) aurExecuteCB() {
@@ -186,6 +198,7 @@ func (s *AURService) GetData() interface{} {
 func (s *AURService) processMsg(msg string) {
 	switch msg {
 	case "sync_finished":
+		log.Debugln("AURService: sync_finished event")
 		s.aurExecuteCB()
 	default:
 		return
@@ -193,8 +206,10 @@ func (s *AURService) processMsg(msg string) {
 }
 
 func NewSyncService(timeout time.Duration, libalpm *alpm.Alpm) *SyncService {
+	//base := &Service{msgChannel: make(chan string), running: false}
 	tservice := &TimeoutService{Timeout: timeout, libalpm: libalpm, mutex: &sync.Mutex{},
 		msgChannel: make(chan string), running: false}
+	//tservice := &TimeoutService{base, timeout, libalpm, &sync.Mutex{}, nil, nil, nil}
 	service := &SyncService{tservice}
 	tservice.setExecuteCB(service.syncExecuteCB)
 	tservice.setMsgProcessorCB(service.processMsg)
@@ -203,8 +218,10 @@ func NewSyncService(timeout time.Duration, libalpm *alpm.Alpm) *SyncService {
 
 func NewRepoService(timeout time.Duration, libalpm *alpm.Alpm,
 	conf map[string]map[string]interface{}) *RepoService {
+	//base := &Service{msgChannel: make(chan string), running: false}
 	tservice := &TimeoutService{Timeout: timeout, libalpm: libalpm, mutex: &sync.Mutex{},
 		msgChannel: make(chan string), running: false, conf: conf}
+	//tservice := &TimeoutService{base, timeout, libalpm, &sync.Mutex{}, nil, nil, conf}
 	service := &RepoService{tservice, list.New(), libalpm.GetIgnoredPackageNames(conf)}
 	tservice.setExecuteCB(service.repoExecuteCB)
 	tservice.setMsgProcessorCB(service.processMsg)
@@ -212,8 +229,10 @@ func NewRepoService(timeout time.Duration, libalpm *alpm.Alpm,
 }
 
 func NewAURService(timeout time.Duration, libalpm *alpm.Alpm) *AURService {
+	//base := &Service{msgChannel: make(chan string), running: false}
 	tservice := &TimeoutService{Timeout: timeout, libalpm: libalpm, mutex: &sync.Mutex{},
 		msgChannel: make(chan string), running: false}
+	//tservice := &TimeoutService{base, timeout, libalpm, &sync.Mutex{}, nil, nil, nil}
 	service := &AURService{tservice, list.New()}
 	tservice.setExecuteCB(service.aurExecuteCB)
 	tservice.setMsgProcessorCB(service.processMsg)
