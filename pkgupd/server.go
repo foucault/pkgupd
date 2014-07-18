@@ -11,6 +11,7 @@ import "encoding/json"
 import "pkgupd/log"
 import "strings"
 import "errors"
+import fsnotify "github.com/go-fsnotify/fsnotify"
 
 const MAX_REQUEST_LENGTH = 16384
 
@@ -19,6 +20,7 @@ type Server struct {
 	closeMsg    chan bool
 	waitGroup   *sync.WaitGroup
 	ServerError chan bool
+	fswatch     *FSWatchService
 }
 
 type Response struct {
@@ -36,9 +38,23 @@ type deadliningListener interface {
 	Close() error
 }
 
-func NewServer() *Server {
+func NewServer(notifyEnable bool) *Server {
+	var watch *FSWatchService
+	if !notifyEnable {
+		watch = nil
+	} else {
+		w, err := NewFSWatchService([]string{"/var/lib/pacman"},
+			fsnotify.Create|fsnotify.Remove)
+		watch = w
+		if err != nil {
+			log.Errorf("Could not start filesystem watcher: %s; disabling\n", err)
+			watch = nil
+		} else {
+			log.Infoln("Enabling filesystem watcher")
+		}
+	}
 	s := &Server{make(map[string]DataService),
-		make(chan bool), &sync.WaitGroup{}, make(chan bool)}
+		make(chan bool), &sync.WaitGroup{}, make(chan bool), watch}
 	return s
 }
 
@@ -56,6 +72,12 @@ func (s *Server) RemoveService(key string) {
 func (s *Server) Start() {
 	for _, service := range s.services {
 		go service.Start()
+		if s.fswatch != nil {
+			s.fswatch.AddListener(service)
+		}
+	}
+	if s.fswatch != nil {
+		go s.fswatch.Start()
 	}
 }
 
@@ -64,6 +86,9 @@ func (s *Server) Stop() {
 		service.Stop()
 	}
 	close(s.closeMsg)
+	if s.fswatch != nil {
+		s.fswatch.Stop()
+	}
 }
 
 func (s *Server) createListener(proto string, addr string) (deadliningListener, error) {

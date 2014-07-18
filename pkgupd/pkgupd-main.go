@@ -279,7 +279,7 @@ func main() {
 		libalpm.AddDatabase(k, servers)
 	}
 
-	server := NewServer()
+	server := NewServer(opts.NotifyFS)
 	services := make(map[string]DataService)
 	services["repo"] = NewRepoService(time.Duration((opts.PollInterval))*time.Second, libalpm, conf)
 	if opts.EnableAUR {

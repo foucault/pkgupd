@@ -5,7 +5,11 @@ import "pkgupd/aur"
 import "pkgupd/log"
 import "sync"
 import "time"
+import "fmt"
 import "container/list"
+import "errors"
+import "strings"
+import "path"
 import fsnotify "github.com/go-fsnotify/fsnotify"
 
 type executeCB func()
@@ -37,6 +41,7 @@ type FSWatchService struct {
 	listeners   []Listener
 	running     bool
 	quitChannel chan bool
+	flags       fsnotify.Op
 	wg          *sync.WaitGroup
 }
 
@@ -56,19 +61,26 @@ func (s *FSWatchService) Start() {
 		for _, v := range s.watches {
 			s.watcher.Add(v)
 		}
+		log.Debugln("Filesystem watch started")
 	serviceLoop:
 		for {
 			select {
 			case event := <-s.watcher.Events:
-				log.Debugln(event)
+				ret, err := s.eventType(&event)
+				if err == nil {
+					log.Debugln(ret)
+					s.notifyListeners(ret)
+				}
 			case err := <-s.watcher.Errors:
 				log.Errorln(err)
 			case <-s.quitChannel:
+				log.Debugln("Stopping filesystem watch")
 				break serviceLoop
 			}
 		}
 		s.watcher.Close()
 		s.wg.Done()
+		log.Debugln("Filesystem watch stopped")
 	}
 }
 
@@ -78,6 +90,29 @@ func (s *FSWatchService) Stop() {
 		s.wg.Wait()
 		s.running = false
 	}
+}
+
+func (s *FSWatchService) notifyListeners(msg string) {
+	for _, l := range s.listeners {
+		l.ProcessEvent("fs_event;;" + msg)
+	}
+}
+
+func (s *FSWatchService) eventType(evt *fsnotify.Event) (string, error) {
+	evtName := evt.Name
+	switch evt.Op & s.flags {
+	case fsnotify.Create:
+		return fmt.Sprintf("%s;;%s", evtName, "create"), nil
+	case fsnotify.Remove:
+		return fmt.Sprintf("%s;;%s", evtName, "remove"), nil
+	case fsnotify.Write:
+		return fmt.Sprintf("%s;;%s", evtName, "write"), nil
+	case fsnotify.Chmod:
+		return fmt.Sprintf("%s;;%s", evtName, "chmod"), nil
+	case fsnotify.Rename:
+		return fmt.Sprintf("%s;;%s", evtName, "rename"), nil
+	}
+	return "", errors.New("unknown event type")
 }
 
 // TimeoutService is a service that executes alpm
@@ -197,10 +232,18 @@ func (s *RepoService) repoExecuteCB() {
 }
 
 func (s *RepoService) processMsg(msg string) {
-	switch msg {
+	tmsg := strings.Split(msg, ";;")
+	switch tmsg[0] {
 	case "sync_finished":
 		log.Debugln("RepoService: sync_finished event")
 		s.repoExecuteCB()
+	case "fs_event":
+		if len(tmsg) == 3 {
+			log.Debugf("RepoService: fs_event: %s %s\n", tmsg[1], tmsg[2])
+			if tmsg[2] == "remove" && path.Base(tmsg[1]) == "db.lck" {
+				s.repoExecuteCB()
+			}
+		}
 	default:
 		return
 	}
@@ -246,10 +289,18 @@ func (s *AURService) GetData() interface{} {
 }
 
 func (s *AURService) processMsg(msg string) {
-	switch msg {
+	tmsg := strings.Split(msg, ";;")
+	switch tmsg[0] {
 	case "sync_finished":
-		log.Debugln("AURService: sync_finished event")
+		log.Debugln("RepoService: sync_finished event")
 		s.aurExecuteCB()
+	case "fs_event":
+		if len(tmsg) == 3 {
+			log.Debugf("AURService: fs_event: %s %s\n", tmsg[1], tmsg[2])
+			if tmsg[2] == "remove" && path.Base(tmsg[1]) == "db.lck" {
+				s.aurExecuteCB()
+			}
+		}
 	default:
 		return
 	}
@@ -289,11 +340,11 @@ func NewAURService(timeout time.Duration, libalpm *alpm.Alpm) *AURService {
 	return service
 }
 
-func NewFSWatchService(files []string) (*FSWatchService, error) {
+func NewFSWatchService(files []string, flags fsnotify.Op) (*FSWatchService, error) {
 	watch, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
 	return &FSWatchService{watcher: watch, wg: &sync.WaitGroup{},
-		quitChannel: make(chan bool), running: false, watches: files}, nil
+		quitChannel: make(chan bool), running: false, watches: files, flags: flags}, nil
 }

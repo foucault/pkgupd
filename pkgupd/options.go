@@ -13,4 +13,5 @@ type Options struct {
 	DBRoot       flags.Filename `short:"d" long:"db-root" default:"/tmp/pkgupd-sandbox" description:"Local/sync database root directory"`
 	ListenType   string         `short:"l" long:"listen-type" default:"tcp" description:"Server listening protocol, 'tcp' or 'unix'"`
 	ListenAddr   string         `short:"r" long:"listen-addr" default:":7356" description:"Address (addr:port) or socket of the server"`
+	NotifyFS     bool           `short:"m" long:"monitor-changes" default:"false" description:"Monitor pacman database for changes"`
 }
