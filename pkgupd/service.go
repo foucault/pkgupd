@@ -6,6 +6,7 @@ import "pkgupd/log"
 import "sync"
 import "time"
 import "container/list"
+import fsnotify "github.com/go-fsnotify/fsnotify"
 
 type executeCB func()
 type msgProcessor func(string)
@@ -28,6 +29,55 @@ type DataService interface {
 	Service
 	GetData() interface{}
 	SendMessage(string)
+}
+
+type FSWatchService struct {
+	watcher     *fsnotify.Watcher
+	watches     []string
+	listeners   []Listener
+	running     bool
+	quitChannel chan bool
+	wg          *sync.WaitGroup
+}
+
+func (s *FSWatchService) ProcessEvent(string) {
+	// no events
+	return
+}
+
+func (s *FSWatchService) AddListener(listener Listener) {
+	s.listeners = append(s.listeners, listener)
+}
+
+func (s *FSWatchService) Start() {
+	if !s.running {
+		s.running = true
+		s.wg.Add(1)
+		for _, v := range s.watches {
+			s.watcher.Add(v)
+		}
+	serviceLoop:
+		for {
+			select {
+			case event := <-s.watcher.Events:
+				log.Debugln(event)
+			case err := <-s.watcher.Errors:
+				log.Errorln(err)
+			case <-s.quitChannel:
+				break serviceLoop
+			}
+		}
+		s.watcher.Close()
+		s.wg.Done()
+	}
+}
+
+func (s *FSWatchService) Stop() {
+	if s.running {
+		s.quitChannel <- true
+		s.wg.Wait()
+		s.running = false
+	}
 }
 
 // TimeoutService is a service that executes alpm
@@ -237,4 +287,13 @@ func NewAURService(timeout time.Duration, libalpm *alpm.Alpm) *AURService {
 	tservice.setExecuteCB(service.aurExecuteCB)
 	tservice.setMsgProcessorCB(service.processMsg)
 	return service
+}
+
+func NewFSWatchService(files []string) (*FSWatchService, error) {
+	watch, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+	return &FSWatchService{watcher: watch, wg: &sync.WaitGroup{},
+		quitChannel: make(chan bool), running: false, watches: files}, nil
 }
