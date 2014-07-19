@@ -2,17 +2,13 @@ package log
 
 import glog "log"
 import "os"
-import term "github.com/kless/term"
 import "fmt"
+import "syscall"
+import "unsafe"
 
-const (
-	_ = iota
-	LogDebug
-	LogInfo
-	LogWarn
-	LogErr
-)
-
+const ioctlReadTermios = 0x5401
+const ioctlWriteTermios = 0x5402
+const ansiBold = 1
 const (
 	ansiBlack = iota
 	ansiRed
@@ -23,13 +19,25 @@ const (
 	ansiCyan
 	ansiWhite
 )
+const (
+	_ = iota
+	LogDebug
+	LogInfo
+	LogWarn
+	LogErr
+)
 
-const ansiBold = 1
+func isTerminal(fd int) bool {
+	var termios syscall.Termios
+	_, _, err := syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd),
+		ioctlReadTermios, uintptr(unsafe.Pointer(&termios)), 0, 0, 0)
+	return err == 0
+}
 
 func genericNew(prefix string, color int) *glog.Logger {
 	hlt := ""
 	rst := ""
-	if term.IsTerminal(int((os.Stderr).Fd())) {
+	if isTerminal(int((os.Stderr).Fd())) {
 		hlt = fmt.Sprintf("\033[3%dm\033[%dm", color, ansiBold)
 		rst = "\033[0m"
 	}
