@@ -34,13 +34,19 @@ def process_data_normal(sock, srv, args):
             print(ret["Data"], file=sys.stderr)
     else:
         if len(ret["Data"]) > 0:
-            if args.verbose:
-                print("SERVICE: %s"%srv)
             for item in ret["Data"]:
                 if item["Foreign"]:
-                    print("[AUR  ] %s"%item["Name"])
+                    if args.verbose:
+                        print("[AUR  ] %s %s -> %s"%(item["Name"],\
+                            item["LocalVersion"],item["RemoteVersion"]))
+                    else:
+                        print("%s"%item["Name"])
                 else:
-                    print("[LOCAL] %s"%item["Name"])
+                    if args.verbose:
+                        print("[LOCAL] %s %s -> %s"%(item["Name"],\
+                                item["LocalVersion"],item["RemoteVersion"]))
+                    else:
+                        print("%s"%item["Name"])
 
 def process_data_numeric(sock, srv, args):
     ret = read_data(sock, srv)
