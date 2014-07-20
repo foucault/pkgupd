@@ -7,6 +7,20 @@ import argparse
 
 DEFAULT_SERVICES = ["repo","aur"]
 
+BASE_ESC = "\033[%dm"
+ESC = {
+    "reset":   BASE_ESC % 0,
+    "bold":    BASE_ESC % 1,
+    "black":   BASE_ESC % 30,
+    "red":     BASE_ESC % 31,
+    "green":   BASE_ESC % 32,
+    "yellow":  BASE_ESC % 33,
+    "blue":    BASE_ESC % 34,
+    "magenta": BASE_ESC % 35,
+    "cyan":    BASE_ESC % 36,
+    "white":   BASE_ESC % 37
+}
+
 def read_data(sock, srv):
     data = {'RequestType':srv}
     sock.send(bytes(json.dumps(data)+"\n", "UTF-8"))
@@ -24,6 +38,24 @@ def read_data(sock, srv):
     return ret
 
 def process_data_normal(sock, srv, args):
+    verbose_color = "[%s%%s%s] %s%%s%s %s%%s%s -> %s%%s%s"%\
+            (ESC["blue"],ESC["reset"],ESC["bold"],ESC["reset"],\
+                ESC["yellow"],ESC["reset"],ESC["green"],ESC["reset"])
+    verbose_simple = "[%s] %s %s -> %s"
+    normal_color = "%s%%s%s"%(ESC["bold"],ESC["reset"])
+    normal_simple = "%s"
+
+    if args.verbose:
+        if args.color and sys.stdout.isatty():
+            lformat = verbose_color
+        else:
+            lformat = verbose_simple
+    else:
+        if args.color and sys.stdout.isatty():
+            lformat = normal_color
+        else:
+            lformat = normal_simple
+
     ret = read_data(sock, srv)
     if ret["Data"] is None:
         if args.verbose:
@@ -37,16 +69,16 @@ def process_data_normal(sock, srv, args):
             for item in ret["Data"]:
                 if item["Foreign"]:
                     if args.verbose:
-                        print("[AUR  ] %s %s -> %s"%(item["Name"],\
-                            item["LocalVersion"],item["RemoteVersion"]))
+                        print(lformat%("AUR".ljust(5," "), item["Name"],\
+                                item["LocalVersion"], item["RemoteVersion"]))
                     else:
-                        print("%s"%item["Name"])
+                        print(lformat%item["Name"])
                 else:
                     if args.verbose:
-                        print("[LOCAL] %s %s -> %s"%(item["Name"],\
-                                item["LocalVersion"],item["RemoteVersion"]))
+                        print(lformat%("LOCAL".ljust(5," "), item["Name"],\
+                                item["LocalVersion"], item["RemoteVersion"]))
                     else:
-                        print("%s"%item["Name"])
+                        print(lformat%item["Name"])
 
 def process_data_numeric(sock, srv, args):
     ret = read_data(sock, srv)
@@ -65,11 +97,14 @@ def init_parser():
     type_help = "Type of connection \"tcp\" or \"unix\""
     port_help = "Port or socket for connection, default 7356 for tcp"
     sep_help = "Separator for numeric data, default is space"
+    color_help = "Use color if outputing to terminal for non-numeric mode"
     parser = argparse.ArgumentParser()
     parser.add_argument("services", metavar="SRV", type=str, nargs="*",\
             help=service_help)
     parser.add_argument("--verbose", "-v", dest="verbose", \
             action="store_true", help=verbose_help)
+    parser.add_argument("--color", "-c", dest="color", \
+            action="store_true", help=color_help)
     parser.add_argument("--numeric", "-n", dest="numeric", \
             action="store_true", help=numeric_help)
     parser.add_argument("--separator", "-s", dest="separator",\
@@ -84,7 +119,8 @@ if __name__ == "__main__":
     arg_parser = init_parser()
     args = arg_parser.parse_args()
     if args.verbose and args.numeric:
-        print("ERROR: Can't use both verbose and numeric modes", file=sys.stderr)
+        print("ERROR: Can't use both verbose and numeric modes",\
+                file=sys.stderr)
         sys.exit(1)
     if len(args.services) == 0:
         services = DEFAULT_SERVICES
@@ -98,14 +134,16 @@ if __name__ == "__main__":
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect(('127.0.0.1',int(args.port)))
         except Exception as exc:
-            print("Cannot open connection to server; bailing out %s"%exc, file=sys.stderr)
+            print("Cannot open connection to server; bailing out %s"%exc,\
+                    file=sys.stderr)
             sys.exit(1)
     elif args.type == "unix":
         try:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             sock.connect(args.port)
         except Exception as exc:
-            print("Cannot open connection to server; bailing out %s"%exc, file=sys.stderr)
+            print("Cannot open connection to server; bailing out %s"%exc,\
+                    file=sys.stderr)
             sys.exit(1)
     else:
         print("ERROR: Unknown connection type, must be \"tcp\" or \"unix\"",\
