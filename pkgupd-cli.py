@@ -44,6 +44,7 @@ def process_data_normal(sock, srv, args):
     verbose_simple = "[%s] %s %s -> %s"
     normal_color = "%s%%s%s"%(ESC["bold"],ESC["reset"])
     normal_simple = "%s"
+    max_srv_len = len(args.max_srv_len)
 
     if args.verbose:
         if args.color and sys.stdout.isatty():
@@ -69,14 +70,16 @@ def process_data_normal(sock, srv, args):
             for item in ret["Data"]:
                 if item["Foreign"]:
                     if args.verbose:
-                        print(lformat%("AUR".ljust(5," "), item["Name"],\
-                                item["LocalVersion"], item["RemoteVersion"]))
+                        print(lformat%(srv.upper().ljust(max_srv_len," "),\
+                                item["Name"], item["LocalVersion"],\
+                                    item["RemoteVersion"]))
                     else:
                         print(lformat%item["Name"])
                 else:
                     if args.verbose:
-                        print(lformat%("LOCAL".ljust(5," "), item["Name"],\
-                                item["LocalVersion"], item["RemoteVersion"]))
+                        print(lformat%(srv.upper().ljust(max_srv_len," "),\
+                                item["Name"], item["LocalVersion"],\
+                                    item["RemoteVersion"]))
                     else:
                         print(lformat%item["Name"])
 
@@ -149,6 +152,9 @@ if __name__ == "__main__":
         print("ERROR: Unknown connection type, must be \"tcp\" or \"unix\"",\
                 file=sys.stderr)
         sys.exit(1)
+
+    # add some "meta options"
+    args.max_srv_len = max(services, key=len)
 
     if args.numeric:
         ret = []
