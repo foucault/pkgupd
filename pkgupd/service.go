@@ -75,6 +75,9 @@ func (s *FSWatchService) Start() {
 				log.Errorln(err)
 			case <-s.quitChannel:
 				log.Debugln("Stopping filesystem watch")
+				for _, watch := range s.watches {
+					s.watcher.Remove(watch)
+				}
 				break serviceLoop
 			}
 		}
