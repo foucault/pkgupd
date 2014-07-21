@@ -21,11 +21,13 @@ ESC = {
     "white":   BASE_ESC % 37
 }
 
-def read_data(sock, srv):
+def read_data(sock, srv, args):
     data = {'RequestType':srv}
     sock.send(bytes(json.dumps(data)+"\n", "UTF-8"))
     res = ""
     buf = ""
+    if args.verbose > 1:
+        print("Reading data from: %s"%(sock.getpeername(),),file=sys.stderr)
     while True:
         buf = sock.recv(1024).decode("UTF-8")
         if '\n' in buf:
@@ -57,12 +59,15 @@ def process_data_normal(sock, srv, args):
         else:
             lformat = normal_simple
 
-    ret = read_data(sock, srv)
+    if args.verbose > 1:
+        print("Getting data for service %s"%srv,file=sys.stderr)
+
+    ret = read_data(sock, srv, args)
     if ret["Data"] is None:
-        if args.verbose:
+        if args.verbose > 1:
             print("No updates for service %s"%srv)
     elif ret["ResponseType"] == "error":
-        if args.verbose:
+        if args.verbose > 1:
             print("Server returned error for service %s"%srv, file=sys.stderr)
             print(ret["Data"], file=sys.stderr)
     else:
@@ -84,7 +89,7 @@ def process_data_normal(sock, srv, args):
                         print(lformat%item["Name"])
 
 def process_data_numeric(sock, srv, args):
-    ret = read_data(sock, srv)
+    ret = read_data(sock, srv, args)
     if ret["Data"] is None:
         return 0
     elif ret["ResponseType"] == "error":
@@ -105,7 +110,7 @@ def init_parser():
     parser.add_argument("services", metavar="SRV", type=str, nargs="*",\
             help=service_help)
     parser.add_argument("--verbose", "-v", dest="verbose", \
-            action="store_true", help=verbose_help)
+            action="count", default=0, help=verbose_help)
     parser.add_argument("--color", "-c", dest="color", \
             action="store_true", help=color_help)
     parser.add_argument("--numeric", "-n", dest="numeric", \
