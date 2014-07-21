@@ -43,8 +43,8 @@ func NewServer(notifyEnable bool) *Server {
 	if !notifyEnable {
 		watch = nil
 	} else {
-		w, err := NewFSWatchService([]string{"/var/lib/pacman"},
-			fsnotify.Create|fsnotify.Remove)
+		w, err := NewFSWatchService([]string{"/var/lib/pacman",
+			"/var/lib/pacman/local"}, fsnotify.Create|fsnotify.Remove)
 		watch = w
 		if err != nil {
 			log.Errorf("Could not start filesystem watcher: %s; disabling\n", err)

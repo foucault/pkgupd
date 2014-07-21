@@ -217,6 +217,7 @@ type RepoService struct {
 	*TimeoutService
 	packages            *list.List
 	ignoredPackageNames []string
+	dbChanged           bool
 }
 
 func (s *RepoService) repoExecuteCB() {
@@ -243,8 +244,16 @@ func (s *RepoService) processMsg(msg string) {
 	case "fs_event":
 		if len(tmsg) == 3 {
 			log.Debugf("RepoService: fs_event: %s %s\n", tmsg[1], tmsg[2])
-			if tmsg[2] == "remove" && path.Base(tmsg[1]) == "db.lck" {
-				s.repoExecuteCB()
+			if path.Base(tmsg[1]) != "db.lck" {
+				s.dbChanged = true
+			} else if tmsg[2] == "remove" && path.Base(tmsg[1]) == "db.lck" {
+				if s.dbChanged {
+					log.Debugln("RepoService: Database changed and lock removed, updating")
+					s.repoExecuteCB()
+					s.dbChanged = false
+				} else {
+					log.Debugln("RepoService: Database lock detected but no changes made")
+				}
 			}
 		}
 	default:
@@ -262,7 +271,8 @@ func (s *RepoService) GetData() interface{} {
 
 type AURService struct {
 	*TimeoutService
-	packages *list.List
+	packages  *list.List
+	dbChanged bool
 }
 
 func (s *AURService) aurExecuteCB() {
@@ -300,8 +310,16 @@ func (s *AURService) processMsg(msg string) {
 	case "fs_event":
 		if len(tmsg) == 3 {
 			log.Debugf("AURService: fs_event: %s %s\n", tmsg[1], tmsg[2])
-			if tmsg[2] == "remove" && path.Base(tmsg[1]) == "db.lck" {
-				s.aurExecuteCB()
+			if path.Base(tmsg[1]) != "db.lck" {
+				s.dbChanged = true
+			} else if tmsg[2] == "remove" && path.Base(tmsg[1]) == "db.lck" {
+				if s.dbChanged {
+					log.Debugln("AURService: Database changed and lock removed, updating")
+					s.aurExecuteCB()
+					s.dbChanged = false
+				} else {
+					log.Debugln("AURService: Database lock detected but no changes made")
+				}
 			}
 		}
 	default:
@@ -326,7 +344,7 @@ func NewRepoService(timeout time.Duration, libalpm *alpm.Alpm,
 	tservice := &TimeoutService{Timeout: timeout, libalpm: libalpm, mutex: &sync.Mutex{},
 		msgChannel: make(chan string), running: false, conf: conf}
 	//tservice := &TimeoutService{base, timeout, libalpm, &sync.Mutex{}, nil, nil, conf}
-	service := &RepoService{tservice, list.New(), libalpm.GetIgnoredPackageNames(conf)}
+	service := &RepoService{tservice, list.New(), libalpm.GetIgnoredPackageNames(conf), false}
 	tservice.setExecuteCB(service.repoExecuteCB)
 	tservice.setMsgProcessorCB(service.processMsg)
 	return service
@@ -337,7 +355,7 @@ func NewAURService(timeout time.Duration, libalpm *alpm.Alpm) *AURService {
 	tservice := &TimeoutService{Timeout: timeout, libalpm: libalpm, mutex: &sync.Mutex{},
 		msgChannel: make(chan string), running: false}
 	//tservice := &TimeoutService{base, timeout, libalpm, &sync.Mutex{}, nil, nil, nil}
-	service := &AURService{tservice, list.New()}
+	service := &AURService{tservice, list.New(), false}
 	tservice.setExecuteCB(service.aurExecuteCB)
 	tservice.setMsgProcessorCB(service.processMsg)
 	return service
