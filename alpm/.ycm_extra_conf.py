@@ -1,5 +1,6 @@
 import os
 import ycm_core
+import glob
 
 flags = [
 '-Wall',
@@ -17,7 +18,7 @@ flags = [
 '-I',
 '/usr/include',
 '-I',
-'/usr/lib/gcc/x86_64-unknown-linux-gnu/4.9.0/include/'
+glob.glob("/usr/lib/gcc/*/*/include")[0]
 ]
 
 # Set this to the absolute path to the folder (NOT the file!) containing the
