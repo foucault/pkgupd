@@ -170,10 +170,10 @@ func (s *TimeoutService) Start() {
 					s.running = false
 					break serviceLoop
 				} else {
-					go s.msgProcessor(val)
+					s.msgProcessor(val)
 				}
 			case <-time.After(s.Timeout):
-				go s.executor()
+				s.executor()
 			}
 		}
 	}

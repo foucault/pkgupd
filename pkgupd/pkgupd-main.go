@@ -7,7 +7,9 @@ import "os"
 import "os/signal"
 import "syscall"
 import "time"
+import "runtime"
 import "runtime/pprof"
+import "runtime/debug"
 import "github.com/jessevdk/go-flags"
 import "path"
 import "strings"
@@ -224,6 +226,14 @@ func fixSandbox(dbpath string, conf map[string]map[string]interface{}) error {
 	return nil
 }
 
+func goRuntimeStats() {
+	m := &runtime.MemStats{}
+	log.Debugln("# goroutines: ", runtime.NumGoroutine())
+	runtime.ReadMemStats(m)
+	log.Debugln("Memory Acquired: ", m.Sys)
+	log.Debugln("Memory Used    : ", m.Alloc)
+}
+
 func main() {
 
 	var opts Options
@@ -325,6 +335,12 @@ mainloop:
 					pprof.WriteHeapProfile(f)
 				}
 				f.Close()
+				log.Debugln("Mem stats before FreeOSMemory")
+				goRuntimeStats()
+				debug.FreeOSMemory()
+				log.Debugln("Mem stats after FreeOSMemory")
+				goRuntimeStats()
+
 			}
 		case err := <-server.serverError:
 			if err == true {
