@@ -20,7 +20,6 @@ void init_paths(char*, char*);
 void goalpm_cleanup();
 void add_server_to_syncdb(syncdb*, char*);
 void free_syncdb_list(alpm_list_t*);
-void dump_servers(syncdb*);
 void dump_syncdb_list(alpm_list_t*);
 void free_pkg_list(alpm_list_t*);
 void sync_dbs(alpm_list_t*, int);

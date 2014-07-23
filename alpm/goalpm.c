@@ -2,7 +2,40 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <assert.h>
 #include "goalpm.h"
+
+typedef struct _paths_t {
+    char *root;
+    char *lib;
+} paths_t;
+
+paths_t *paths;
+
+paths_t *paths_new(char *_root, char *_lib) {
+    paths_t *p = malloc(sizeof(paths_t));
+    assert(p != NULL);
+    if(_root != NULL) {
+        p->root = _root;
+    } else {
+        p->root = "/";
+    }
+
+    if(_lib != NULL) {
+        p->lib = _lib;
+    } else {
+        p->lib = "/var/lib/pacman";
+    }
+
+    return p;
+
+}
+
+void free_paths(paths_t *p) {
+    free(p->root);
+    free(p->lib);
+    free(p);
+}
 
 void logeverything(alpm_loglevel_t level, const char *fmt, va_list args){
 	if(fmt[0] == '\0') {
@@ -17,29 +50,19 @@ void logeverything(alpm_loglevel_t level, const char *fmt, va_list args){
 	vprintf(fmt, args);
 }
 
-char* root_path = NULL;
-char* lib_path = NULL;
-
-char* _strdup(const char *str) {
+static char* _strdup(const char *str) {
 	return str ? strcpy(malloc(strlen(str)+1), str) : NULL;
 }
 
 void init_paths(char* root, char* lib){
-	if(root_path){
-		free(root_path);
-	}
-	if(lib_path){
-		free(lib_path);
-	}
-	root_path = root;
-	lib_path = lib;
+    if(!paths) {
+        paths = paths_new(root, lib);
+    }
 }
 
 void goalpm_cleanup() {
-	free(root_path);
-	root_path = NULL;
-	free(lib_path);
-	lib_path = NULL;
+    free_paths(paths);
+    paths = NULL;
 }
 
 syncdb* new_syncdb(char* name){
@@ -52,13 +75,12 @@ syncdb* new_syncdb(char* name){
 	return db;
 }
 
-void free_syncdb(void* db) {
+static void free_syncdb(void* db) {
 	syncdb* dbb = (syncdb*)db;
 	free(dbb->name);
 	alpm_list_free(dbb->servers);
 	free(dbb);
 	dbb = NULL;
-	db = NULL;
 }
 
 void free_syncdb_list(alpm_list_t* list) {
@@ -66,14 +88,13 @@ void free_syncdb_list(alpm_list_t* list) {
 	alpm_list_free(list);
 }
 
-void free_pkg(void* pkg) {
+static void free_pkg(void* pkg) {
 	upd_package* pkgg = (upd_package*)pkg;
 	free(pkgg->name);
 	free(pkgg->rem_version);
 	free(pkgg->loc_version);
 	free(pkgg);
 	pkgg = NULL;
-	pkg = NULL;
 }
 
 void free_pkg_list(alpm_list_t* list) {
@@ -85,7 +106,7 @@ void add_server_to_syncdb(syncdb* db, char* server){
 	db->servers = alpm_list_add(db->servers, server);
 }
 
-void dump_servers(syncdb* db) {
+static void dump_servers(syncdb* db) {
 	alpm_list_t* it;
 	for(it = db->servers; it; it=alpm_list_next(it)){
 		printf("  %s\n", (char*)it->data);
@@ -109,34 +130,15 @@ void dump_syncdb_list(alpm_list_t* list){
 	}
 }
 
-const char* get_root_path() {
-	const char* root;
-	if(!root_path) {
-		root = "/";
-	} else {
-		root = root_path;
-	}
-	return root;
-}
-
-const char* get_lib_path() {
-	const char* lib;
-	if(!lib_path) {
-		lib = "/var/lib/pacman";
-	} else {
-		lib = lib_path;
-	}
-	return lib;
-}
-
-alpm_handle_t* create_handle() {
+static alpm_handle_t* create_handle() {
+    assert(paths != NULL);
 	alpm_errno_t err;
-	alpm_handle_t *handle = alpm_initialize(get_root_path(),get_lib_path(), &err);
+	alpm_handle_t *handle = alpm_initialize(paths->root, paths->lib, &err);
 	/*alpm_option_set_logcb(handle, logeverything);*/
 	return handle;
 }
 
-void register_sync_dbs(alpm_handle_t* handle, alpm_list_t* syncdbs){
+static void register_sync_dbs(alpm_handle_t* handle, alpm_list_t* syncdbs){
 	const alpm_siglevel_t level = ALPM_SIG_DATABASE | ALPM_SIG_DATABASE_OPTIONAL;
 	alpm_list_t *it = NULL;
 	alpm_list_t *it2 = NULL;
@@ -149,7 +151,7 @@ void register_sync_dbs(alpm_handle_t* handle, alpm_list_t* syncdbs){
 	}
 }
 
-int is_foreign(alpm_handle_t* handle, alpm_pkg_t* pkg) {
+static int is_foreign(alpm_handle_t* handle, alpm_pkg_t* pkg) {
 	const char *pkgname = alpm_pkg_get_name(pkg);
 	alpm_list_t *i;
 	alpm_list_t *sync_dbs = alpm_get_syncdbs(handle);
@@ -254,11 +256,15 @@ const char* pkgver(const char* pkgname) {
 	alpm_db_t *db;
 	const char *retval;
 
-	handle = alpm_initialize(get_root_path(), get_lib_path(), &err);
-	if ( handle ) {
+    assert(paths != NULL);
+    const char *root = paths->root;
+    const char *lib = paths->lib;
+
+	handle = alpm_initialize(root, lib, &err);
+	if (handle) {
 		db = alpm_get_localdb(handle);
 		pkg = alpm_db_get_pkg(db, pkgname);
-	       	retval = _strdup(alpm_pkg_get_version(pkg));
+        retval = _strdup(alpm_pkg_get_version(pkg));
 		alpm_release(handle);
 		return retval;
 	}
