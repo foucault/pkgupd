@@ -15,26 +15,42 @@ import fsnotify "github.com/go-fsnotify/fsnotify"
 type executeCB func()
 type msgProcessor func(string)
 
+// Listener is an interface that should be implemented
+// by all types that expect to read events from services.
+// Events are string messages with fields seperated by
+// double semicolons.
 type Listener interface {
+	// The event that has been received from the service
 	ProcessEvent(string)
 }
 
 // Service is a generic goroutine that is both a listener
-// and an event creator
+// and an event creator. All services should expect events
+// from other listeners so they must implement the Listener
+// interface. Services also accept other listeners that can
+// be notified upon request
 type Service interface {
 	Listener
+	// Start starts the service (usually as goroutine)
 	Start()
+	// Stop stops the services
 	Stop()
+	// AddListener subscribes a type to receive events from
+	// this service
 	AddListener(listener Listener)
 }
 
-// DataService also supports retrieval of data and message passing
+// DataService is a service that also supports retrieval of
+// data and message passing
 type DataService interface {
 	Service
 	GetData() interface{}
 	SendMessage(string)
 }
 
+// FSWatchService implements the Service interface and
+// provides events to listeners for filesystem changes.
+// The event pattern is fs_notify;;FILENAME;;EVT_TYPE
 type FSWatchService struct {
 	watcher     *fsnotify.Watcher
 	watches     []string
@@ -45,15 +61,21 @@ type FSWatchService struct {
 	wg          *sync.WaitGroup
 }
 
+// ProcessEvent is only implemented to fulfill the Listener
+// interface but no events are required to be processed by
+// this service.
 func (s *FSWatchService) ProcessEvent(string) {
 	// no events
 	return
 }
 
+// AddListener implements the AddListener method for interface
+// Listener
 func (s *FSWatchService) AddListener(listener Listener) {
 	s.listeners = append(s.listeners, listener)
 }
 
+// Start starts the watch service
 func (s *FSWatchService) Start() {
 	if !s.running {
 		s.running = true
@@ -87,6 +109,8 @@ func (s *FSWatchService) Start() {
 	}
 }
 
+// Stop stops the watch service. This blocks until all events
+// are flushed
 func (s *FSWatchService) Stop() {
 	if s.running {
 		s.quitChannel <- true
@@ -133,6 +157,7 @@ type TimeoutService struct {
 	conf         map[string]map[string]interface{}
 }
 
+// Start starts the timeout service
 func (s *TimeoutService) Start() {
 	if !s.running {
 		s.running = true
@@ -154,6 +179,7 @@ func (s *TimeoutService) Start() {
 	}
 }
 
+// Stop stops the timeout service
 func (s *TimeoutService) Stop() {
 	if s.running {
 		s.msgChannel <- "quit"
@@ -169,6 +195,11 @@ func (s *TimeoutService) setMsgProcessorCB(cb msgProcessor) {
 	s.msgProcessor = cb
 }
 
+// SendMessage sends a message to the timeout service that is
+// processed from the msgProcessor callback. Message "quit" is
+// reserved and always break the service main loop so it cannot
+// be passed to the service. If you want to stop the service
+// use TimeoutService.Stop()
 func (s *TimeoutService) SendMessage(msg string) {
 	// quit is a reserved message
 	if msg != "quit" {
@@ -176,18 +207,25 @@ func (s *TimeoutService) SendMessage(msg string) {
 	}
 }
 
+// AddListener adds a new listener to be notified for
+// events from this service
 func (s *TimeoutService) AddListener(listener Listener) {
 	s.listeners = append(s.listeners, listener)
 }
 
+// ProcessEvent calls the message processor callback on the
+// specified message
 func (s *TimeoutService) ProcessEvent(msg string) {
 	s.msgProcessor(msg)
 }
 
+// SyncService is a timeout service that syncs
+// pacman databases
 type SyncService struct {
 	*TimeoutService
 }
 
+// The executor callback
 func (s *SyncService) syncExecuteCB() {
 	log.Infof("Execute Database Service Update\n")
 	s.mutex.Lock()
@@ -199,6 +237,7 @@ func (s *SyncService) syncExecuteCB() {
 	log.Infoln("Database update finished")
 }
 
+// The message processor callback
 func (s *SyncService) processMsg(msg string) {
 	return
 }
@@ -209,10 +248,13 @@ func (s *SyncService) notifyListeners(msg string) {
 	}
 }
 
+// GetData always returns nil for SyncService
 func (s *SyncService) GetData() interface{} {
 	return nil
 }
 
+// RepoService is a timeout service that retrieves
+// local package updates from the pacman database
 type RepoService struct {
 	*TimeoutService
 	packages            *list.List
@@ -220,6 +262,7 @@ type RepoService struct {
 	dbChanged           bool
 }
 
+// The executor callback
 func (s *RepoService) repoExecuteCB() {
 	log.Infoln("Execute Repo Service Update")
 	s.mutex.Lock()
@@ -235,6 +278,7 @@ func (s *RepoService) repoExecuteCB() {
 	log.Infoln("Repo update finished")
 }
 
+// The message processor callback
 func (s *RepoService) processMsg(msg string) {
 	tmsg := strings.Split(msg, ";;")
 	switch tmsg[0] {
@@ -261,6 +305,8 @@ func (s *RepoService) processMsg(msg string) {
 	}
 }
 
+// GetData returns the local package updates and its
+// type is []*alpm.Pkg
 func (s *RepoService) GetData() interface{} {
 	var pkgs []*alpm.Pkg
 	for e := s.packages.Front(); e != nil; e = e.Next() {
@@ -269,12 +315,15 @@ func (s *RepoService) GetData() interface{} {
 	return pkgs
 }
 
+// AURService is a timeout services that retrieves the
+// remote version of foreign packages and checks for updates
 type AURService struct {
 	*TimeoutService
 	packages  *list.List
 	dbChanged bool
 }
 
+// The executor callback
 func (s *AURService) aurExecuteCB() {
 	log.Infof("Execute AUR Service Update\n")
 	s.mutex.Lock()
@@ -293,6 +342,8 @@ func (s *AURService) aurExecuteCB() {
 	log.Infoln("AUR update finished")
 }
 
+// GetData returns a slice of AUR-updatable foreign packages.
+// The return type is []*alpm.Pkg
 func (s *AURService) GetData() interface{} {
 	var pkgs []*alpm.Pkg
 	for e := s.packages.Front(); e != nil; e = e.Next() {
@@ -301,6 +352,7 @@ func (s *AURService) GetData() interface{} {
 	return pkgs
 }
 
+// The message processor callback
 func (s *AURService) processMsg(msg string) {
 	tmsg := strings.Split(msg, ";;")
 	switch tmsg[0] {
@@ -327,6 +379,8 @@ func (s *AURService) processMsg(msg string) {
 	}
 }
 
+// NewSyncService creates a new sync service. It requires the timeout
+// interval and a pointer to an initialized libalpm.
 func NewSyncService(timeout time.Duration, libalpm *alpm.Alpm) *SyncService {
 	//base := &Service{msgChannel: make(chan string), running: false}
 	tservice := &TimeoutService{Timeout: timeout, libalpm: libalpm, mutex: &sync.Mutex{},
@@ -338,29 +392,34 @@ func NewSyncService(timeout time.Duration, libalpm *alpm.Alpm) *SyncService {
 	return service
 }
 
+// NewRepoService creates a new repo service. It requires the timeout
+// interval, a pointer to an initialized libalpm and the pacman.conf
+// configuration map.
 func NewRepoService(timeout time.Duration, libalpm *alpm.Alpm,
 	conf map[string]map[string]interface{}) *RepoService {
-	//base := &Service{msgChannel: make(chan string), running: false}
 	tservice := &TimeoutService{Timeout: timeout, libalpm: libalpm, mutex: &sync.Mutex{},
 		msgChannel: make(chan string), running: false, conf: conf}
-	//tservice := &TimeoutService{base, timeout, libalpm, &sync.Mutex{}, nil, nil, conf}
 	service := &RepoService{tservice, list.New(), libalpm.GetIgnoredPackageNames(conf), false}
 	tservice.setExecuteCB(service.repoExecuteCB)
 	tservice.setMsgProcessorCB(service.processMsg)
 	return service
 }
 
+// NewAURService creates a new AUR service. It requires the timeout
+// interval and a pointer to an initialized libalpm.
 func NewAURService(timeout time.Duration, libalpm *alpm.Alpm) *AURService {
-	//base := &Service{msgChannel: make(chan string), running: false}
 	tservice := &TimeoutService{Timeout: timeout, libalpm: libalpm, mutex: &sync.Mutex{},
 		msgChannel: make(chan string), running: false}
-	//tservice := &TimeoutService{base, timeout, libalpm, &sync.Mutex{}, nil, nil, nil}
 	service := &AURService{tservice, list.New(), false}
 	tservice.setExecuteCB(service.aurExecuteCB)
 	tservice.setMsgProcessorCB(service.processMsg)
 	return service
 }
 
+// NewFSWatchService creates a new filesystem watch service. It requires
+// a list of watched files or folders and a flag mask of events to
+// monitor, for example fsnotify.Create|fsnotify.Remove will only send
+// notifications for create and remove events.
 func NewFSWatchService(files []string, flags fsnotify.Op) (*FSWatchService, error) {
 	watch, err := fsnotify.NewWatcher()
 	if err != nil {

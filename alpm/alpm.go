@@ -1,3 +1,5 @@
+// Package alpm provides a cgo wrapper around alpm for functions used
+// by the pkgupd server
 package alpm
 
 /*
@@ -13,10 +15,10 @@ import "os"
 import "bufio"
 import "sync"
 import "container/list"
-import "errors"
 import "strings"
 import "fmt"
 
+// Remove duplicate strings from string list
 func deduplicateStringList(a []string) []string {
 	result := []string{}
 	seen := map[string]bool{}
@@ -29,30 +31,45 @@ func deduplicateStringList(a []string) []string {
 	return result
 }
 
+// Alpm represents a libalpm instance
 type Alpm struct {
+	// The root path of the filesystem upon which
+	// this libalpm will operate (usually "/")
 	RootPath string
-	LibPath  string
-	Mutex    *sync.Mutex
-	dbs      *C.alpm_list_t
+	// The path of the local/sync library used by libalpm
+	LibPath string
+	// A mutex used for operations that require write access
+	// to the database (these create a db.lck file in the base
+	// path of the database). The mutex must be acquired if
+	// a write operation is needed.
+	Mutex *sync.Mutex
+	// A list of sync dbs
+	dbs *C.alpm_list_t
 }
 
+// Pkg represents a pacman package
 type Pkg struct {
-	Name          string
-	LocalVersion  string
+	// Name of the package
+	Name string
+	// Local version of the package
+	LocalVersion string
+	// Remote version of the package. If there is no remote
+	// package available this should be 0
 	RemoteVersion string
-	Foreign       bool
+	// This is true if the package has no entry in the local
+	// database or on any remote sync database
+	Foreign bool
 }
 
+// IsUpdatable checks if this package is updatable. If
+// remote version is zero this is always false.
 func (p *Pkg) IsUpdatable() bool {
-	ret := VerCmp(p.LocalVersion, p.RemoteVersion)
-	if ret < 0 {
-		return true
-	}
-	return false
+	return IsUpdatablePkg(p)
 }
 
-// This returns a map with string keys and map values. The maps
-// are map[string]interface{}. inteface{} is either string or a []string
+// ParsePacmanConf reads the specified pacman configuration and returns a map
+// with string keys and map values. The maps are map[string]interface{}.
+// interface{} is either string or a []string
 func ParsePacmanConf(conf string) (map[string]map[string]interface{}, error) {
 	// matches "[foo]" and puts "foo" in the first match group
 	sectionRE := regexp.MustCompile(`\[(.*)\]`)
@@ -101,6 +118,14 @@ func ParsePacmanConf(conf string) (map[string]map[string]interface{}, error) {
 	return confMap, nil
 }
 
+// GetServersFromConf searches all Include and Server directives
+// found in repo section in pacman.conf and returns a list of all servers
+// that correspond to this repository. Duplicate servers are discarded.
+// The required arguments is a map of the values under the repo section (conf),
+// the name of the repo (repo) and the architecture of the machine (arch).
+// BUG: This always returns the Included servers first and the the single
+// Server directives in the section, even if they are specified in a different
+// order
 func GetServersFromConf(conf map[string]interface{}, repo string, arch string) []string {
 	var ires []string
 	if _, ok := conf["Include"]; ok {
@@ -120,10 +145,10 @@ func GetServersFromConf(conf map[string]interface{}, repo string, arch string) [
 				}
 				serverEntry = strings.Split(line, "=")
 				if len(serverEntry) == 2 {
-					serverUrl := strings.Trim(serverEntry[1], " \t\r\n")
-					serverUrl = strings.Replace(serverUrl, "$repo", repo, -1)
-					serverUrl = strings.Replace(serverUrl, "$arch", arch, -1)
-					ires = append(ires, serverUrl)
+					serverURL := strings.Trim(serverEntry[1], " \t\r\n")
+					serverURL = strings.Replace(serverURL, "$repo", repo, -1)
+					serverURL = strings.Replace(serverURL, "$arch", arch, -1)
+					ires = append(ires, serverURL)
 				}
 			}
 			file.Close()
@@ -137,15 +162,20 @@ func GetServersFromConf(conf map[string]interface{}, repo string, arch string) [
 	return deduplicateStringList(ires)
 }
 
+// NewAlpm returns a new instance of the libalpm library. It requires a
+// path to the root of the pacman operations and a path to the root of
+// the pacman local/sync library.
 func NewAlpm(root string, lib string) (*Alpm, error) {
 	if _, err := os.Stat(lib); os.IsNotExist(err) {
-		return nil, errors.New(fmt.Sprintf("Library path '%s' does not exit", lib))
+		return nil, fmt.Errorf("Library path '%s' does not exit", lib)
 	}
 	ret := &Alpm{RootPath: root, LibPath: lib, Mutex: &sync.Mutex{}}
 	C.init_paths(C.CString(root), C.CString(lib))
 	return ret, nil
 }
 
+// AddDatabase adds a new database named "name" with a list of
+// sync servers (servers) to the libalpm.
 func (a *Alpm) AddDatabase(name string, servers []string) error {
 	db := C.new_syncdb(C.CString(name))
 	for _, v := range servers {
@@ -155,6 +185,8 @@ func (a *Alpm) AddDatabase(name string, servers []string) error {
 	return nil
 }
 
+// GetUpdates returns a slice of package ([]*Pkg) that are updatable.
+// Only local packages with remote versions in a repo are included.
 func (a *Alpm) GetUpdates() []*Pkg {
 	var pkglist []*Pkg
 
@@ -171,6 +203,8 @@ func (a *Alpm) GetUpdates() []*Pkg {
 	return pkglist
 }
 
+// GetUpdatesList is the same as GetUpdates but returns a container/list.List
+// instead of a slice.
 func (a *Alpm) GetUpdatesList() *list.List {
 	pkglist := list.New()
 
@@ -187,6 +221,7 @@ func (a *Alpm) GetUpdatesList() *list.List {
 
 }
 
+// GetForeign returns a slice of all foreign packages ([]*Pkg)
 func (a *Alpm) GetForeign() []*Pkg {
 	var pkglist []*Pkg
 
@@ -203,6 +238,8 @@ func (a *Alpm) GetForeign() []*Pkg {
 	return pkglist
 }
 
+// GetForeignList is the same as GetForeign but returns a container/list.List
+// instead of a slice.
 func (a *Alpm) GetForeignList() *list.List {
 	pkglist := list.New()
 
@@ -218,6 +255,8 @@ func (a *Alpm) GetForeignList() *list.List {
 	return pkglist
 }
 
+// SyncDBs synchronizes the databases. Set force to true to redownload
+// the databases even if they are up-to-date.
 func (a *Alpm) SyncDBs(force bool) {
 	_force := 0
 	if force {
@@ -226,6 +265,8 @@ func (a *Alpm) SyncDBs(force bool) {
 	C.sync_dbs(a.dbs, C.int(_force))
 }
 
+// GetGroupPackageNames returns a slice of string including all the
+// package names that fall under the specified group.
 func (a *Alpm) GetGroupPackageNames(group string) []string {
 	ret := []string{}
 	cgroup := C.CString(group)
@@ -238,6 +279,10 @@ func (a *Alpm) GetGroupPackageNames(group string) []string {
 	return ret
 }
 
+// GetIgnoredPackageNames returns a list of package names that are
+// ignored based on the parsed pacman.conf configuration. This includes
+// both IngorePkg and IgnoreGroup. IgnoreGroup packages are expanded to
+// the included packages.
 func (a *Alpm) GetIgnoredPackageNames(conf map[string]map[string]interface{}) []string {
 	ignoredPkgs := []string{}
 	if val, ok := conf["options"]["IgnorePkg"].(string); ok {
@@ -260,6 +305,7 @@ func (a *Alpm) GetIgnoredPackageNames(conf map[string]map[string]interface{}) []
 	return ignoredPkgs
 }
 
+// Close deinitializes libalpm and frees allocated resources
 func (a *Alpm) Close() {
 	C.free_syncdb_list(a.dbs)
 	C.goalpm_cleanup()
@@ -269,6 +315,7 @@ func freeStr(ptr *C.char) {
 	C.free(unsafe.Pointer(ptr))
 }
 
+// PkgVer returns the version of the package named pkgname
 func PkgVer(pkgname string) string {
 	cpkgname := C.CString(pkgname)
 	defer freeStr(cpkgname)

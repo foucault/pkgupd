@@ -13,21 +13,28 @@ import "strings"
 import "errors"
 import fsnotify "github.com/go-fsnotify/fsnotify"
 
-const MAX_REQUEST_LENGTH = 16384
+// Length of the maximum incoming request in bytes
+const MaxRequestLength = 16384
 
+// Server is the basic structure that listens for client requests
+// and processes them. It also holds a list of enabled services
 type Server struct {
 	services    map[string]DataService
 	closeMsg    chan bool
 	waitGroup   *sync.WaitGroup
-	ServerError chan bool
+	serverError chan bool
 	fswatch     *FSWatchService
 }
 
+// Response struct is used when marshaling json responses
+// to the clients
 type Response struct {
 	ResponseType string      `json:"ResponseType"`
 	Data         []*alpm.Pkg `json:"Data"`
 }
 
+// Request struct is used to unmarshal json requests from
+// the clients
 type Request struct {
 	RequestType string `json:"RequestType"`
 }
@@ -38,6 +45,8 @@ type deadliningListener interface {
 	Close() error
 }
 
+// NewServer creates a new server instance. Set the argument to true to also
+// enable filesystem notifications
 func NewServer(notifyEnable bool) *Server {
 	var watch *FSWatchService
 	if !notifyEnable {
@@ -58,10 +67,13 @@ func NewServer(notifyEnable bool) *Server {
 	return s
 }
 
+// AddService adds a new service to the server with the specified key.
+// The service must implement the DataService interface
 func (s *Server) AddService(key string, service DataService) {
 	s.services[key] = service
 }
 
+// RemoveService removes a service from the server with the specified key
 func (s *Server) RemoveService(key string) {
 	if _, ok := s.services[key]; ok {
 		s.services[key].Stop()
@@ -69,6 +81,8 @@ func (s *Server) RemoveService(key string) {
 	}
 }
 
+// Start starts the server. This only starts the slave services. To enable
+// the tcp/unix interface use Server.Serve
 func (s *Server) Start() {
 	for _, service := range s.services {
 		go service.Start()
@@ -81,6 +95,8 @@ func (s *Server) Start() {
 	}
 }
 
+// Stop stops the server. This stops the server immediately!
+// Use Server.Wait() before issuing this command
 func (s *Server) Stop() {
 	for _, service := range s.services {
 		service.Stop()
@@ -99,35 +115,36 @@ func (s *Server) createListener(proto string, addr string) (deadliningListener, 
 		if err != nil {
 			log.Errorln("Failed to resolve tcp address", addr)
 			return nil, err
-		} else {
-			log.Debugln("TCP address", addr, "created successfully")
-			return net.ListenTCP("tcp", taddr)
 		}
+		log.Debugln("TCP address", addr, "created successfully")
+		return net.ListenTCP("tcp", taddr)
 	case "unix":
 		uaddr, err := net.ResolveUnixAddr("unix", addr)
 		if err != nil {
 			log.Errorln("Failed to resolve unix address", addr)
 			return nil, err
-		} else {
-			log.Debugln("UNIX address", addr, "created successfully")
-			return net.ListenUnix("unix", uaddr)
 		}
+		log.Debugln("UNIX address", addr, "created successfully")
+		return net.ListenUnix("unix", uaddr)
 	}
 	return nil, errors.New("Invalid protocol specified")
 }
 
+// Serve starts serving clients to the configured address
 func (s *Server) Serve(proto string, addr string) {
 	s.waitGroup.Add(1)
 	defer s.waitGroup.Done()
 	listener, err := s.createListener(proto, addr)
 	if err != nil {
 		log.Errorln("Failed to create listener:", err)
-		s.ServerError <- true
+		s.serverError <- true
 		return
 	}
 	s.serve(listener)
 }
 
+// Wait blocks until all connections are flushed. Use this before
+// stopping the server
 func (s *Server) Wait() {
 	s.waitGroup.Wait()
 }
@@ -164,10 +181,10 @@ func (s *Server) handleRequest(conn net.Conn) {
 		line = bin.Bytes()
 		totalRead += len(line)
 		// Stop reading if request length is too big
-		if totalRead >= MAX_REQUEST_LENGTH {
+		if totalRead >= MaxRequestLength {
 			s.errorResponse(conn, "request length exceeded")
 			log.Debugf("Request from %s exceeded length %d\n",
-				conn.RemoteAddr(), MAX_REQUEST_LENGTH)
+				conn.RemoteAddr(), MaxRequestLength)
 			break
 		}
 		if err := bin.Err(); err == nil {

@@ -1,3 +1,4 @@
+// Package main is the main executable for the pkgupd server
 package main
 
 import "pkgupd/alpm"
@@ -15,7 +16,10 @@ import "io"
 
 import "pkgupd/log"
 
-const PACMAN_DB = "/var/lib/pacman"
+// Path of the pacman database
+const PacmanDB = "/var/lib/pacman"
+
+// Error codes for SandboxError
 const (
 	_ = iota
 	MissingSandboxDir
@@ -23,11 +27,16 @@ const (
 	MissingSyncDir
 )
 
+// DBPathError is an error type for missing databases
 type DBPathError struct {
+	// A list of missing sync databases
 	MissingDBs []string
 }
 
+// SandboxError is an error type for errors occuring
+// during sandbox fsck.
 type SandboxError struct {
+	// The code of the error
 	ErrorCode int
 }
 
@@ -65,9 +74,8 @@ func pathIsDirectory(path string) (bool, error) {
 		//File exists
 		if fi.IsDir() {
 			return true, nil
-		} else {
-			return false, nil
 		}
+		return false, nil
 	} else if _, ok := err.(*os.PathError); ok && os.IsNotExist(err) {
 		return false, nil
 	} else {
@@ -81,9 +89,8 @@ func pathIsSymlink(path string) (bool, error) {
 		//File exists and is link
 		if (fi.Mode())&os.ModeSymlink != 0 {
 			return true, nil
-		} else {
-			return false, nil
 		}
+		return false, nil
 	} else if _, ok := err.(*os.PathError); ok && os.IsNotExist(err) {
 		return false, nil
 	} else {
@@ -98,9 +105,8 @@ func pathIsSymlinkDir(path string) (bool, error) {
 		mode := fi.Mode()
 		if (mode&os.ModeSymlink != 0) && (mode&os.ModeDir != 0) {
 			return true, nil
-		} else {
-			return false, nil
 		}
+		return false, nil
 	} else if _, ok := err.(*os.PathError); ok && os.IsNotExist(err) {
 		return false, nil
 	} else {
@@ -155,7 +161,7 @@ func fsckSandbox(dbpath string, conf map[string]map[string]interface{}) error {
 	var missingDBs []string
 	var dbExists bool
 
-	for k, _ := range conf {
+	for k := range conf {
 		if k == "options" {
 			continue
 		}
@@ -191,7 +197,7 @@ func fixSandbox(dbpath string, conf map[string]map[string]interface{}) error {
 				}
 				iterations--
 			case MissingLocalDir:
-				er := os.Symlink(path.Join(PACMAN_DB, "local"), path.Join(dbpath, "local"))
+				er := os.Symlink(path.Join(PacmanDB, "local"), path.Join(dbpath, "local"))
 				if er != nil {
 					return errors.New("Could not symlink local db " + er.Error())
 				}
@@ -200,7 +206,7 @@ func fixSandbox(dbpath string, conf map[string]map[string]interface{}) error {
 		} else if er, ok := err.(*DBPathError); ok {
 			log.Infoln(er)
 			for _, db := range er.MissingDBs {
-				cer := copyFile(path.Join(PACMAN_DB, "sync", db+".db"),
+				cer := copyFile(path.Join(PacmanDB, "sync", db+".db"),
 					path.Join(dbpath, "sync", db+".db"))
 				if cer != nil {
 					fmt.Println("Could not copy database", db, ".", cer)
@@ -320,7 +326,7 @@ mainloop:
 				}
 				f.Close()
 			}
-		case err := <-server.ServerError:
+		case err := <-server.serverError:
 			if err == true {
 				log.Errorln("Server error")
 				break mainloop

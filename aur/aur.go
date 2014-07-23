@@ -1,3 +1,5 @@
+// Package aur provides functions and tools to interact with the
+// ArchLinux User Repository
 package aur
 
 import "encoding/json"
@@ -8,18 +10,31 @@ import "errors"
 import "strings"
 import "pkgupd/alpm"
 
-const RESP_TYPE_ERROR = "error"
-const RESP_TYPE_MULTIINFO = "multiinfo"
-const RESP_TYPE_MSEARCH = "msearch"
-const RESP_TYPE_INFO = "info"
-const RESP_TYPE_SEARCH = "search"
-const QUERY_STRING = "https://aur.archlinux.org/rpc.php?type="
+// AUR Response type error
+const RespTypeError = "error"
+
+// AUR Response type multiinfo
+const RespTypeMultiinfo = "multiinfo"
+
+// AUR Response type msearch
+const RespTypeMsearch = "msearch"
+
+// AUR Response type info
+const RespTypeInfo = "info"
+
+// AUR Response type search
+const RespTypeSearch = "search"
+
+// The base query url
+const QueryString = "https://aur.archlinux.org/rpc.php?type="
 
 type aurResponse struct {
 	Type    string          `json:"type"`
 	Results json.RawMessage `json:"results"`
 }
 
+// AurPkg is the type used to represent an AUR package and it
+// is also used to unmarshal AUR responses
 type AurPkg struct {
 	Type           string `json:"URL"`
 	Description    string `json:"Description"`
@@ -54,18 +69,22 @@ func getAurResponse(query string) (*aurResponse, error) {
 	return &response, nil
 }
 
+// InfoStr searches the AUR for a package named pkg and returns
+// its information as an *AurPkg struct. If an error is encountered
+// the result will be nil and the error will be populated with the
+// server's response
 func InfoStr(pkg string) (*AurPkg, error) {
-	queryString := QUERY_STRING + RESP_TYPE_INFO + `&`
+	queryString := QueryString + RespTypeInfo + `&`
 	escPkg := `arg=` + html.EscapeString(pkg)
-	finalUrl := queryString + escPkg
-	response, err := getAurResponse(finalUrl)
+	finalURL := queryString + escPkg
+	response, err := getAurResponse(finalURL)
 	if err != nil {
 		return nil, err
 	}
-	if response.Type == RESP_TYPE_ERROR {
+	if response.Type == RespTypeError {
 		return nil, errors.New(string(response.Results))
 	}
-	if response.Type != RESP_TYPE_INFO {
+	if response.Type != RespTypeInfo {
 		return nil, errors.New("Unexpected response type")
 	}
 
@@ -79,10 +98,15 @@ func InfoStr(pkg string) (*AurPkg, error) {
 	return aurPkg, nil
 }
 
+// InfoPkg is the same as InfoStr but uses an *alpm.Pkg as argument
 func InfoPkg(pkg *alpm.Pkg) (*AurPkg, error) {
 	return InfoStr(pkg.Name)
 }
 
+// UpdateRemoteVersions will populate the RemoteVersion field of
+// all the provided alpm.Pkg structs with their AUR version if
+// available. If a server error is encountered the returned
+// error contains the server's respose
 func UpdateRemoteVersions(fpkgs []*alpm.Pkg) error {
 	// Morph packages into map for easy indexing
 	pkgs := make(map[string]*alpm.Pkg)
@@ -92,22 +116,22 @@ func UpdateRemoteVersions(fpkgs []*alpm.Pkg) error {
 	if len(pkgs) == 0 {
 		return errors.New("Package list is empty")
 	}
-	queryString := QUERY_STRING + RESP_TYPE_MULTIINFO + `&`
+	queryString := QueryString + RespTypeMultiinfo + `&`
 	var escPkgs []string
-	for k, _ := range pkgs {
+	for k := range pkgs {
 		escPkgs = append(escPkgs, "arg[]="+html.EscapeString(k))
 	}
-	finalUrl := queryString + strings.Join(escPkgs, "&")
+	finalURL := queryString + strings.Join(escPkgs, "&")
 
-	response, err := getAurResponse(finalUrl)
+	response, err := getAurResponse(finalURL)
 	if err != nil {
 		return err
 	}
 
-	if response.Type == RESP_TYPE_ERROR {
+	if response.Type == RespTypeError {
 		return errors.New(string(response.Results))
 	}
-	if response.Type != RESP_TYPE_MULTIINFO {
+	if response.Type != RespTypeMultiinfo {
 		return errors.New("Unexpected response type")
 	}
 	var aurPkgList []*AurPkg
@@ -119,7 +143,6 @@ func UpdateRemoteVersions(fpkgs []*alpm.Pkg) error {
 
 	var remVersion string
 	for _, item := range aurPkgList {
-		//fmt.Printf("%s: %s -> %s", item.Name)
 		remVersion = item.Version
 		pkgs[item.Name].RemoteVersion = remVersion
 	}
