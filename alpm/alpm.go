@@ -156,7 +156,10 @@ func GetServersFromConf(conf map[string]interface{}, repo string, arch string) [
 	}
 	if _, ok := conf["Server"]; ok {
 		for _, entry := range conf["Server"].([]string) {
-			ires = append(ires, entry)
+			serverURL := strings.Trim(entry, " \t\r\n")
+			serverURL = strings.Replace(serverURL, "$repo", repo, -1)
+			serverURL = strings.Replace(serverURL, "$arch", arch, -1)
+			ires = append(ires, serverURL)
 		}
 	}
 	return deduplicateStringList(ires)
