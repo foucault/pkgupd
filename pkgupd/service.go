@@ -230,10 +230,15 @@ func (s *SyncService) syncExecuteCB() {
 	log.Infof("Execute Database Service Update\n")
 	s.mutex.Lock()
 	s.libalpm.Mutex.Lock()
-	s.libalpm.SyncDBs(false)
+	didSync := s.libalpm.SyncDBs(false)
 	s.libalpm.Mutex.Unlock()
 	s.mutex.Unlock()
-	go s.notifyListeners("sync_finished")
+	if didSync {
+		log.Debugln("Databases changed, notifying listeners")
+		s.notifyListeners("sync_finished")
+	} else {
+		log.Debugln("Database not changed, no need to notify listeners")
+	}
 	log.Infoln("Database update finished")
 }
 

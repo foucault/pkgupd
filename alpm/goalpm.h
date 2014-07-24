@@ -22,7 +22,7 @@ void add_server_to_syncdb(syncdb*, char*);
 void free_syncdb_list(alpm_list_t*);
 void dump_syncdb_list(alpm_list_t*);
 void free_pkg_list(alpm_list_t*);
-void sync_dbs(alpm_list_t*, int);
+int sync_dbs(alpm_list_t*, int);
 
 alpm_list_t* get_updates(alpm_list_t*);
 alpm_list_t* get_foreign(alpm_list_t*);

@@ -45,6 +45,8 @@ type Alpm struct {
 	Mutex *sync.Mutex
 	// A list of sync dbs
 	dbs *C.alpm_list_t
+	// Number of database
+	numdbs int
 }
 
 // Pkg represents a pacman package
@@ -172,7 +174,7 @@ func NewAlpm(root string, lib string) (*Alpm, error) {
 	if _, err := os.Stat(lib); os.IsNotExist(err) {
 		return nil, fmt.Errorf("Library path '%s' does not exit", lib)
 	}
-	ret := &Alpm{RootPath: root, LibPath: lib, Mutex: &sync.Mutex{}}
+	ret := &Alpm{RootPath: root, LibPath: lib, Mutex: &sync.Mutex{}, numdbs: 0}
 	C.init_paths(C.CString(root), C.CString(lib))
 	return ret, nil
 }
@@ -185,6 +187,7 @@ func (a *Alpm) AddDatabase(name string, servers []string) error {
 		C.add_server_to_syncdb(db, C.CString(v))
 	}
 	a.dbs = C.alpm_list_add(a.dbs, unsafe.Pointer(db))
+	a.numdbs++
 	return nil
 }
 
@@ -259,13 +262,18 @@ func (a *Alpm) GetForeignList() *list.List {
 }
 
 // SyncDBs synchronizes the databases. Set force to true to redownload
-// the databases even if they are up-to-date.
-func (a *Alpm) SyncDBs(force bool) {
+// the databases even if they are up-to-date. Returns true if all
+// databases are already up to date.
+func (a *Alpm) SyncDBs(force bool) bool {
 	_force := 0
 	if force {
 		_force = 1
 	}
-	C.sync_dbs(a.dbs, C.int(_force))
+	ret := C.sync_dbs(a.dbs, C.int(_force))
+	if int(ret) != a.numdbs {
+		return true
+	}
+	return false
 }
 
 // GetGroupPackageNames returns a slice of string including all the
@@ -311,6 +319,7 @@ func (a *Alpm) GetIgnoredPackageNames(conf map[string]map[string]interface{}) []
 // Close deinitializes libalpm and frees allocated resources
 func (a *Alpm) Close() {
 	C.free_syncdb_list(a.dbs)
+	a.numdbs = 0
 	C.goalpm_cleanup()
 }
 
