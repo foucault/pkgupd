@@ -217,8 +217,7 @@ def main():
 
     if args.type == "tcp":
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(('127.0.0.1', int(args.port)))
+            sock = socket.create_connection(("localhost", int(args.port)))
         except OSError as exc:
             print("Cannot open connection to server; bailing out %s"%exc,\
                     file=sys.stderr)
