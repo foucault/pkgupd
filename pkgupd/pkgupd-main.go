@@ -223,7 +223,6 @@ func fixSandbox(dbpath string, conf map[string]map[string]interface{}) error {
 			return errors.New("Too many fsck iterations")
 		}
 	}
-	return nil
 }
 
 func goRuntimeStats() {
