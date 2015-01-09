@@ -35,7 +35,7 @@ type aurResponse struct {
 
 // AurPkg is the type used to represent an AUR package and it
 // is also used to unmarshal AUR responses
-type AurPkg struct {
+type Pkg struct {
 	Type           string `json:"URL"`
 	Description    string `json:"Description"`
 	Version        string `json:"Version"`
@@ -73,7 +73,7 @@ func getAurResponse(query string) (*aurResponse, error) {
 // its information as an *AurPkg struct. If an error is encountered
 // the result will be nil and the error will be populated with the
 // server's response
-func InfoStr(pkg string) (*AurPkg, error) {
+func InfoStr(pkg string) (*Pkg, error) {
 	queryString := QueryString + RespTypeInfo + `&`
 	escPkg := `arg=` + html.EscapeString(pkg)
 	finalURL := queryString + escPkg
@@ -88,7 +88,7 @@ func InfoStr(pkg string) (*AurPkg, error) {
 		return nil, errors.New("Unexpected response type")
 	}
 
-	var aurPkg *AurPkg
+	var aurPkg *Pkg
 
 	err = json.Unmarshal(response.Results, &aurPkg)
 	if err != nil {
@@ -99,7 +99,7 @@ func InfoStr(pkg string) (*AurPkg, error) {
 }
 
 // InfoPkg is the same as InfoStr but uses an *alpm.Pkg as argument
-func InfoPkg(pkg *alpm.Pkg) (*AurPkg, error) {
+func InfoPkg(pkg *alpm.Pkg) (*Pkg, error) {
 	return InfoStr(pkg.Name)
 }
 
@@ -134,7 +134,7 @@ func UpdateRemoteVersions(fpkgs []*alpm.Pkg) error {
 	if response.Type != RespTypeMultiinfo {
 		return errors.New("Unexpected response type")
 	}
-	var aurPkgList []*AurPkg
+	var aurPkgList []*Pkg
 
 	err = json.Unmarshal(response.Results, &aurPkgList)
 	if err != nil {
