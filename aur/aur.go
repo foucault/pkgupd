@@ -43,7 +43,7 @@ type AurPkg struct {
 	FirstSubmitted int    `json:"FirstSubmitted"`
 	License        string `json:"License"`
 	ID             int    `json:"ID"`
-	OutOFDate      int    `json:"OutOfDate"`
+	OutOfDate      int    `json:"OutOfDate"`
 	LastModified   int    `json:"LastModified"`
 	Maintainer     string `json:"Maintainer"`
 	CategoryID     int    `json:"CategoryID"`
