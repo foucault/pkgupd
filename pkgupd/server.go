@@ -3,6 +3,7 @@ package main
 import "net"
 import "bufio"
 
+import "os"
 import "fmt"
 import "time"
 import "sync"
@@ -125,7 +126,19 @@ func (s *Server) createListener(proto string, addr string) (deadliningListener, 
 			return nil, err
 		}
 		log.Debugln("UNIX address", addr, "created successfully")
-		return net.ListenUnix("unix", uaddr)
+		listen, err := net.ListenUnix("unix", uaddr)
+		if err == nil {
+			defer func() {
+				fi, er := os.Stat(addr)
+				if (er == nil) && (fi.Mode()&os.ModeSocket != 0) {
+					os.Chmod(addr, 0666)
+					log.Infoln("Changing permissions for socket")
+				} else {
+					log.Infoln("Socket", addr, "created but is not a file")
+				}
+			}()
+		}
+		return listen, err
 	}
 	return nil, errors.New("Invalid protocol specified")
 }
