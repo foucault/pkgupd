@@ -1,0 +1,12 @@
+[Unit]
+Description=Package Update Daemon
+After=network.target
+
+[Service]
+User=nobody
+Group=nobody
+Type=simple
+ExecStart=/usr/bin/pkgupd -s -a -v -l unix -r /run/pkgupd/pkgupd.sock -d /run/pkgupd
+
+[Install]
+WantedBy=multi-user.target
