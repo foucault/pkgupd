@@ -24,8 +24,8 @@ repository (it's not go-gettable yet, sorry) and also `go get` the dependencies
     go get github.com/go-fsnotify/fsnotify
 
 Then you can `go install pkugpd/pkgupd`. It is recommended that you use the
-PKGBUILD for the installation though, as it will build a ready-to-use archlinux
-package.
+[PKGBUILD](https://aur.archlinux.org/packages/pkgupd-git) for the installation
+though, as it will build a ready-to-use archlinux package.
 
 ### Use and configure
 
