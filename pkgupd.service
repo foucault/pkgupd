@@ -3,10 +3,11 @@ Description=Package Update Daemon
 After=network.target
 
 [Service]
+EnvironmentFile=/etc/conf.d/pkgupd
 User=nobody
 Group=nobody
 Type=simple
-ExecStart=/usr/bin/pkgupd -s -a -v -l unix -r /run/pkgupd/pkgupd.sock -d /run/pkgupd
+ExecStart=/usr/bin/pkgupd $PKGUPD_ARGS -l unix -r /run/pkgupd/pkgupd.sock -d /run/pkgupd
 
 [Install]
 WantedBy=multi-user.target
