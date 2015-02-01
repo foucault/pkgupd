@@ -21,9 +21,9 @@ type Options struct {
 	// Path of the sandbox database
 	DBRoot flags.Filename `short:"d" long:"db-root" default:"/tmp/pkgupd-sandbox" description:"Local/sync database root directory"`
 	// Type of the listening socket (tcp or unix)
-	ListenType string `short:"l" long:"listen-type" default:"tcp" description:"Server listening protocol, 'tcp' or 'unix'"`
+	ListenType string `short:"l" long:"listen-type" default:"unix" description:"Server listening protocol, 'tcp' or 'unix'"`
 	// Address of the listening socket for tcp or socket path for unix
-	ListenAddr string `short:"r" long:"listen-addr" default:":7356" description:"Address (addr:port) or socket of the server"`
+	ListenAddr string `short:"r" long:"listen-addr" default:"/tmp/pkgupd.sock" description:"Address (addr:port) or socket of the server"`
 	// Enable automatic updates when the pacman database changes
 	NotifyFS bool `short:"m" long:"monitor-changes" default:"false" description:"Monitor pacman database for changes"`
 }
