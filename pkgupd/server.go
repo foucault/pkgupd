@@ -120,6 +120,14 @@ func (s *Server) createListener(proto string, addr string) (deadliningListener, 
 		log.Debugln("TCP address", addr, "created successfully")
 		return net.ListenTCP("tcp", taddr)
 	case "unix":
+		_, err := os.Stat(addr)
+		if err == nil {
+			log.Warnln("Found old socket, will try to delete")
+			er := os.Remove(addr)
+			if er != nil {
+				log.ErrorFatal("Failed to remove old socket, bailing out:", er)
+			}
+		}
 		uaddr, err := net.ResolveUnixAddr("unix", addr)
 		if err != nil {
 			log.Errorln("Failed to resolve unix address", addr)
