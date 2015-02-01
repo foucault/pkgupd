@@ -1,0 +1,135 @@
+=head1 NAME
+
+pkgupd - Monitor repositories and AUR for package updates
+
+=head1 SYNOPSIS
+
+Usage: pkgupd [options]
+
+=head1 DESCRIPTION
+
+pkgupd monitors repositories and AUR for package updates. It makes a sandbox
+pacman database and syncs it periodically. It will never touch your original
+pacman database.
+
+=head2 Communicating with the server
+
+Clients can poll the server for updates either through a TCP socket or through
+a UNIX socket, depending on how the program has been invoked. The protocol is
+very simple, but it may change in the future.  To ask for an update the client
+sends a JSON string as such. JSON strings B<must> be followed by a new line
+character C<\n>. Everything after the new line character is discarded.
+
+ { "RequestType": "[ServiceType]" }\n
+
+C<[ServiceType]> can be currently either C<repo> or C<aur> for, although more
+can be added in the future. C<repo> prints all updatable packages that are
+backed by a repository and C<aur> all updatable packages that are found in AUR.
+Packages missing from either services are never reported.
+
+The format of the server's response is
+
+ { "ResponseType": "[Type]", "Data": "..." }\n
+
+C<[Type]> can either be C<ok> or C<error>. In case of an error C<Data>
+contains the error message. If no error occurred C<Data> will be a list
+of packages. The format of a package is:
+
+ {
+   "Name" : "...",
+   "LocalVersion" : "...",
+   "RemoteVersion" : "...",
+   "Foreign" : "[true|false]"
+ }
+
+New lines are added for clarity. There are no new lines in the response except
+for the final one, so you can safely delimit the responses at new lines.
+C<Name> is the name of the package, C<LocalVersion> is the currently installed
+version of the package, C<RemoteVersion> is the updatable version either on the
+repository or in AUR and C<Foreign> indicates whether the package is backed by
+a repository (C<false>) or not (C<true>).
+
+=head2 Bundled client
+
+A simple python client is included C<pkgupd_cli>. Check C<pkgupd_cli -h> for
+options. Also a simple wrapper around the client C<upkg> is provided that uses
+the most common options to connect to the server. It works with the systemd
+service out of the box. You can write your clients if you want!
+
+=head2 Systemd service
+
+pkgupd distribution also includes a systemd service and an associated
+environment file C</etc/conf.d/pkgupd>. Any option mentioned here can be used
+in the configuration file.
+
+=head1 OPTIONS
+
+=head2 -s, --enable-sync
+
+Enable the automatic synchronization of databases.
+
+=head2 -a, --enable-aur
+
+Check for updates of local packages in AUR.
+
+=head2 --sync-interval
+
+The interval, in seconds, between two database synchronizations.
+
+=head2 --aur-interval
+
+The interval, in seconds, between two AUR checks.
+
+=head2 --poll-interval
+
+The interval, in seconds, between two checks for updates.
+
+=head2 --pacman-conf
+
+The path of the pacman.conf configuration file. pkgupd needs access to your
+pacman configuration so that it can auto-discover repositories and servers.
+
+=head2 -v, --verbose
+
+Enable verbose logging
+
+=head2 -d, --db-root
+
+The path of the sandboxed pacman database. B<Do not use the default pacman
+directory>. Any other folder will do. pkgupd will populate the directory
+accordingly.
+
+=head2 -l, --listen-type
+
+Choose the communication protocol for the server. Available options are C<tcp>,
+for a TCP socket, and C<unix>, for a UNIX socket.
+
+=head2 -r, --listen-addr
+
+This is either the port or the socket file depending on whether the server is
+listening on a TCP socket or a UNIX socket.
+
+=head2 -m, --monitor-changes
+
+Add an inotify watch on the pacman database. When a database update occurs, for
+example when a package is updated, the server will update itself accordingly.
+
+=head2 -h, --help
+
+Show a short help message
+
+=head1 BUGS
+
+When the inotify watch is enabled there is no way to tell how many foreign packages
+have been updated, so an updated is triggered after B<every> single package update.
+
+Please report any bugs to the author.
+
+=head1 LICENSE
+
+The program is distributed under the GPL3 license
+
+=head1 AUTHOR
+
+Spyros Stathopoulos <spystath@gmail.com>
+
