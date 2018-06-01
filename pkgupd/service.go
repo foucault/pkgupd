@@ -10,7 +10,7 @@ import "container/list"
 import "errors"
 import "strings"
 import "path"
-import fsnotify "github.com/go-fsnotify/fsnotify"
+import fsnotify "github.com/fsnotify/fsnotify"
 
 type executeCB func()
 type msgProcessor func(string)

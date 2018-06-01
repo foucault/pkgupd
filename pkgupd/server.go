@@ -12,7 +12,7 @@ import "encoding/json"
 import "pkgupd/log"
 import "strings"
 import "errors"
-import fsnotify "github.com/go-fsnotify/fsnotify"
+import fsnotify "github.com/fsnotify/fsnotify"
 
 // Length of the maximum incoming request in bytes
 const MaxRequestLength = 16384

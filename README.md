@@ -21,7 +21,7 @@ You will need a Go toolchain to build. In your `$GOPATH/src` clone the
 repository (it's not go-gettable yet, sorry) and also `go get` the dependencies
 
     go get github.com/jessevdk/go-flags
-    go get github.com/go-fsnotify/fsnotify
+    go get github.com/fsnotify/fsnotify
 
 Then you can `go install pkugpd/pkgupd`. It is recommended that you use the
 [PKGBUILD](https://aur.archlinux.org/packages/pkgupd-git) for the installation
