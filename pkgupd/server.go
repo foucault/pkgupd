@@ -227,6 +227,12 @@ func (s *Server) handleRequest(conn net.Conn) {
 					s.errorResponse(conn, "invalid request")
 					break
 				}
+			case "sync":
+				if v, ok := s.services["sync"]; ok {
+					v.SendMessage("force_sync")
+				} else {
+					s.errorResponse(conn, "invalid request")
+				}
 			default:
 				s.errorResponse(conn, "invalid request")
 				break

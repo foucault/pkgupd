@@ -98,6 +98,29 @@ def read_data(sock, srv, args):
     rret = json.loads(res)
     return rret
 
+
+def update_server(sock, args):
+    """
+    Forces a server sync update
+
+    Args:
+      sock: The socket to connect to
+      args: Command line arguments
+    """
+
+    data = {'RequestType': "sync"}
+    sock.send(bytes(json.dumps(data)+"\n", "UTF-8"))
+
+    ret = read_data(sock, "sync", args)
+    if ret["ResponseType"] == "error":
+        logerr("Server returned error for service %s" % srv, args, 2)
+        logerr(ret["Data"], args, 2)
+    elif ret["ResponseType"] == "ok":
+        logstd("OK", args, 1)
+    else:
+        logerr("Unknown response type", args, 2)
+
+
 def process_data_normal(sock, srv, args):
     """
     Reads data from server found at rsock for service rsrv and prints
@@ -176,6 +199,8 @@ def init_parser():
       The argpars.ArgumentParser() for the program
     """
     verbose_help = "Print a more detailed report"
+    sync_help = "Force update of the sync state and exit. "+\
+            "Other arguments will be ignored"
     numeric_help = "Print the number of updates per service, "+\
             "missing services will be replaced by NA"
     service_help = "List of services to query, missing services will be ignored"
@@ -188,6 +213,8 @@ def init_parser():
             help=service_help)
     parser.add_argument("--verbose", "-v", dest="verbose", \
             action="count", default=0, help=verbose_help)
+    parser.add_argument("--force-sync", "-f", dest="force_sync", \
+            action="store_true", help=sync_help)
     parser.add_argument("--color", "-c", dest="color", \
             action="store_true", help=color_help)
     parser.add_argument("--numeric", "-n", dest="numeric", \
@@ -237,6 +264,10 @@ def main():
 
     # add some "meta options"
     args.max_srv_len = max(services, key=len)
+
+    if args.force_sync:
+        update_server(sock, args)
+        return
 
     if args.numeric:
         ret = []

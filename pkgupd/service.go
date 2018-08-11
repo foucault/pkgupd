@@ -12,7 +12,7 @@ import "strings"
 import "path"
 import fsnotify "github.com/fsnotify/fsnotify"
 
-type executeCB func()
+type executeCB func(args ...string)
 type msgProcessor func(string)
 
 // Listener is an interface that should be implemented
@@ -226,11 +226,14 @@ type SyncService struct {
 }
 
 // The executor callback
-func (s *SyncService) syncExecuteCB() {
+func (s *SyncService) syncExecuteCB(args ...string) {
+
+	force := stringInList(args, "force")
+
 	log.Infof("Execute Database Service Update\n")
 	s.mutex.Lock()
 	s.libalpm.Mutex.Lock()
-	didSync := s.libalpm.SyncDBs(false)
+	didSync := s.libalpm.SyncDBs(force)
 	s.libalpm.Mutex.Unlock()
 	s.mutex.Unlock()
 	if didSync {
@@ -244,7 +247,13 @@ func (s *SyncService) syncExecuteCB() {
 
 // The message processor callback
 func (s *SyncService) processMsg(msg string) {
-	return
+	tmsg := strings.Split(msg, ";;")
+	switch tmsg[0] {
+	case "force_sync":
+		s.syncExecuteCB("force")
+	default:
+		return
+	}
 }
 
 func (s *SyncService) notifyListeners(msg string) {
@@ -268,7 +277,7 @@ type RepoService struct {
 }
 
 // The executor callback
-func (s *RepoService) repoExecuteCB() {
+func (s *RepoService) repoExecuteCB(args ...string) {
 	log.Infoln("Execute Repo Service Update")
 	s.mutex.Lock()
 	s.packages = s.packages.Init()
@@ -329,7 +338,7 @@ type AURService struct {
 }
 
 // The executor callback
-func (s *AURService) aurExecuteCB() {
+func (s *AURService) aurExecuteCB(args ...string) {
 	log.Infof("Execute AUR Service Update\n")
 	s.mutex.Lock()
 	s.packages = s.packages.Init()
