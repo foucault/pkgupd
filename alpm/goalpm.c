@@ -175,7 +175,7 @@ alpm_list_t* get_updates(alpm_list_t* syncdbs){
 
 	for(it = alpm_db_get_pkgcache(localdb); it; it=alpm_list_next(it)){
 		pkg = it->data;
-		spkg = alpm_sync_newversion(pkg, alpm_get_syncdbs(handle));
+		spkg = alpm_sync_get_new_version(pkg, alpm_get_syncdbs(handle));
 		if(spkg != NULL) {
 			/****** LEAK? ******/
 			upd_package* upkg = (upd_package*)malloc(sizeof(upd_package));
