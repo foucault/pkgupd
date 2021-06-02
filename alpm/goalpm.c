@@ -234,12 +234,12 @@ int sync_dbs(alpm_list_t* dbs, int force){
 	alpm_list_t *it;
 	int retval = 0;
 	int tempret = 0;
-	alpm_db_t *db = NULL;
+	alpm_list_t *db = NULL;
 	alpm_handle_t* handle = create_handle();
 	register_sync_dbs(handle, dbs);
 	for(it = alpm_get_syncdbs(handle); it; it = alpm_list_next(it)){
 		db = it->data;
-		tempret = alpm_db_update(force, db);
+		tempret = alpm_db_update(handle, db, force);
 		retval += abs(tempret);
 		/*if(tempret < 0){
 			printf("error: %s for db %s\n", alpm_strerror(alpm_errno(handle)),
